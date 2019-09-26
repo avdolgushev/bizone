@@ -11,14 +11,15 @@ import (
 type JobObj struct {
 	// Values of the object
 	// Pointers - to make default values as nil instead of 0
-	Arg1, Arg2 *float64
+	Arg1, Arg2 *int32
 	res        int
 	err        bool
 
 	lock int32
 }
 
-func (obj *JobObj) getRes() interface{} {
+// returns result
+func (obj *JobObj) GetRes() interface{} {
 	obj.Lock()
 	defer obj.Unlock()
 
@@ -29,12 +30,15 @@ func (obj *JobObj) getRes() interface{} {
 	}
 }
 
-func (obj *JobObj) doJob(arg interface{}) {
+// Performs the job using the provided arg
+func (obj *JobObj) DoJob(arg interface{}) {
 	obj.Lock()
 	defer obj.Unlock()
 
 	proc := arg.(*syscall.Proc)
-	if obj.Arg1 == nil || obj.Arg2 == nil || *obj.Arg2 == 0 {
+
+	// check that argument are presented, second isn't 0 and both fits int32
+	if obj.err == true || obj.Arg1 == nil || obj.Arg2 == nil || *obj.Arg2 == 0 {
 		obj.err = true
 	} else {
 		res, _, _ := proc.Call(uintptr(*obj.Arg1), uintptr(*obj.Arg2))
@@ -49,5 +53,5 @@ func (obj *JobObj) Lock() {
 }
 
 func (obj *JobObj) Unlock() {
-	atomic.AddInt32(&obj.lock, -1)
+	atomic.StoreInt32(&obj.lock, 0)
 }

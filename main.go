@@ -26,7 +26,7 @@ func getProc(procname string) (*syscall.Proc, error) {
 
 	if runtime.GOOS == "windows" {
 		if runtime.GOARCH == "386" {
-			dllpath = filepath.Join(wd, "math_x32.dll")
+			dllpath = filepath.Join(wd, "math_x86.dll")
 		} else {
 			dllpath = filepath.Join(wd, "math_x64.dll")
 		}
@@ -52,12 +52,18 @@ func getProc(procname string) (*syscall.Proc, error) {
 }
 
 // Processes all jobs from file and saves results to out.txt
-func processJobs(path string) (int, error) {
+func processJobsFromFile(path string) (int, error) {
 	proc, err := getProc("Div")
 	checkErrFatal(err)
 
+	var maxWorkers int32
+	if runtime.GOARCH == "386" {
+		maxWorkers = 500
+	} else {
+		maxWorkers = 5000
+	}
 	workers := Workers{
-		maxWorkers: 10000,
+		maxWorkers: maxWorkers,
 		arg:        proc,
 		In:         make(chan Ijob, 1000),
 		Out:        make(chan Ijob, 1000),
@@ -85,7 +91,7 @@ func processOutput(workers *Workers, outpath string) (count int, err error) {
 
 	count = 0
 	for vi := range workers.Out {
-		v := vi.(*JobObj).getRes().(string)
+		v := vi.GetRes().(string)
 		_, err = wr.WriteString(v)
 		if err != nil {
 			log.Println(err)
@@ -110,7 +116,12 @@ func processJobsFromReader(reader io.Reader, workers *Workers) {
 	for dec.More() {
 		var parsed JobObj
 		err = dec.Decode(&parsed)
-		checkErrFatal(err)
+		switch err.(type) {
+		case *json.UnmarshalTypeError:
+			parsed.err = true
+		default:
+			checkErrFatal(err)
+		}
 
 		workers.CreateNewWorker()
 		workers.In <- &parsed
@@ -130,7 +141,7 @@ func main() {
 	}
 
 	start := time.Now()
-	_, err := processJobs(os.Args[1])
+	_, err := processJobsFromFile(os.Args[1])
 	if err != nil {
 		log.Fatal(err)
 	}

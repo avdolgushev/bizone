@@ -15,22 +15,22 @@ func checkErr(err error, t *testing.T) {
 func TestSimple(t *testing.T) {
 	_, err := processJobsFromFile("jobsSimple.json")
 	checkErr(err, t)
-	data, err := ioutil.ReadFile("Out.txt")
+	data, err := ioutil.ReadFile("out.txt")
 	checkErr(err, t)
 
-	expected := []byte("2\n8\n")
-	if bytes.Compare(expected, data) != 0 {
-		t.Fatalf("Expected: %q, Found: %q", string(expected), string(data))
+	res1, res2 := "2\n8\n", "8\n2\n"
+	if bytes.Compare([]byte(res1), data) != 0 && bytes.Compare([]byte(res2), data) != 0 {
+		t.Fatalf("Expected: %q or %q, Found: %q", res1, res2, string(data))
 	}
 }
 
 func TestCorrupted(t *testing.T) {
 	_, err := processJobsFromFile("jobsCorrupted.json")
 	checkErr(err, t)
-	data, err := ioutil.ReadFile("Out.txt")
+	data, err := ioutil.ReadFile("out.txt")
 	checkErr(err, t)
 
-	expected := []byte("err\nerr\nerr\nerr\n8\n")
+	expected := bytes.Repeat([]byte("err\n"), 10)
 	if bytes.Compare(expected, data) != 0 {
 		t.Fatalf("Expected: %q, Found: %q", string(expected), string(data))
 	}
@@ -39,4 +39,10 @@ func TestCorrupted(t *testing.T) {
 func TestHuge(t *testing.T) {
 	_, err := processJobsFromFile("jobsHuge.json")
 	checkErr(err, t)
+	data, err := ioutil.ReadFile("out.txt")
+	checkErr(err, t)
+
+	if bytes.Count(data, []byte("2\n")) != 25000 || bytes.Count(data, []byte("8\n")) != 25000 || bytes.Count(data, []byte("\n")) != 50000 {
+		t.Fatal("Expected: 25000 of \"2\\n\" and \"8\\n\" and 50000 lines.")
+	}
 }

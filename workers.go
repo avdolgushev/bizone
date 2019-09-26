@@ -7,10 +7,11 @@ import (
 )
 
 type Ijob interface {
-	doJob(arg interface{})
-	getRes() interface{}
+	DoJob(arg interface{})
+	GetRes() interface{}
 }
 
+// Structure to run several Ijob workers
 type Workers struct {
 	currentWorkers, maxWorkers int32
 	In, Out                    chan Ijob
@@ -30,9 +31,10 @@ func (obj *Workers) Lock() {
 }
 
 func (obj *Workers) Unlock() {
-	atomic.AddInt32(&obj.lock, -1)
+	atomic.StoreInt32(&obj.lock, 0)
 }
 
+// Creates new worker if it fits the limit
 func (obj *Workers) CreateNewWorker() {
 	obj.Lock()
 	defer obj.Unlock()
@@ -44,9 +46,10 @@ func (obj *Workers) CreateNewWorker() {
 	}
 }
 
+// Processes input's jobs and sends them to out
 func (obj *Workers) processJobs() {
 	for job := range obj.In {
-		job.doJob(obj.arg)
+		job.DoJob(obj.arg)
 		obj.Out <- job
 	}
 
@@ -57,7 +60,11 @@ func (obj *Workers) processJobs() {
 	obj.currentWorkers--
 }
 
+// run a goroutine that will close out channel when all workers finish
 func (obj *Workers) CreateCloser() {
+	obj.Lock()
+	defer obj.Unlock()
+
 	if obj.once == false {
 		obj.once = true
 
