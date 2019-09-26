@@ -13,9 +13,9 @@ func checkErr(err error, t *testing.T) {
 }
 
 func TestSimple(t *testing.T) {
-	_, err := processJobs("jobsSimple.json")
+	_, err := processJobsFromFile("jobsSimple.json")
 	checkErr(err, t)
-	data, err := ioutil.ReadFile("out.txt")
+	data, err := ioutil.ReadFile("Out.txt")
 	checkErr(err, t)
 
 	expected := []byte("2\n8\n")
@@ -25,9 +25,9 @@ func TestSimple(t *testing.T) {
 }
 
 func TestCorrupted(t *testing.T) {
-	_, err := processJobs("jobsCorrupted.json")
+	_, err := processJobsFromFile("jobsCorrupted.json")
 	checkErr(err, t)
-	data, err := ioutil.ReadFile("out.txt")
+	data, err := ioutil.ReadFile("Out.txt")
 	checkErr(err, t)
 
 	expected := []byte("err\nerr\nerr\nerr\n8\n")
@@ -37,6 +37,6 @@ func TestCorrupted(t *testing.T) {
 }
 
 func TestHuge(t *testing.T) {
-	_, err := processJobs("jobsHuge.json")
+	_, err := processJobsFromFile("jobsHuge.json")
 	checkErr(err, t)
 }

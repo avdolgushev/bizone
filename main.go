@@ -1,28 +1,22 @@
 package main
 
 import (
-	"bytes"
+	"bufio"
 	"encoding/json"
-	"fmt"
-	"io/ioutil"
+	"errors"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
-	"sync"
+	"runtime"
 	"syscall"
 	"time"
-	"unsafe"
 )
 
-// Represents one Job object
-type JobObj struct {
-	// Values of the object
-	// Pointers - to make default values as nil instead of 0
-	Arg1, Arg2 *int
-	rawdata    []byte
-	res        int
-	err        bool
-	*sync.WaitGroup
+func checkErrFatal(err error) {
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 // Gets specified function from math.dll and nil error if success
@@ -30,10 +24,14 @@ func getProc(procname string) (*syscall.Proc, error) {
 	wd, _ := os.Getwd()
 	dllpath := ""
 
-	if t := uintptr(0); unsafe.Sizeof(t) == 8 {
-		dllpath = filepath.Join(wd, "math_x64.dll")
+	if runtime.GOOS == "windows" {
+		if runtime.GOARCH == "386" {
+			dllpath = filepath.Join(wd, "math_x32.dll")
+		} else {
+			dllpath = filepath.Join(wd, "math_x64.dll")
+		}
 	} else {
-		dllpath = filepath.Join(wd, "math_x32.dll")
+		return nil, errors.New("unsupported OS")
 	}
 
 	dll, err := syscall.LoadDLL(dllpath)
@@ -53,65 +51,77 @@ func getProc(procname string) (*syscall.Proc, error) {
 	return proc, nil
 }
 
-// Performs the passed job
-func calcOne(job *JobObj, proc *syscall.Proc) {
-	err := json.Unmarshal(bytes.TrimRight(job.rawdata, ","), &job)
-	if err != nil || job.Arg1 == nil || job.Arg2 == nil || *job.Arg2 == 0 {
-		job.err = true
-	} else {
-		res, _, _ := proc.Call(uintptr(*job.Arg1), uintptr(*job.Arg2))
-		job.res = int(res)
+// Processes all jobs from file and saves results to out.txt
+func processJobs(path string) (int, error) {
+	proc, err := getProc("Div")
+	checkErrFatal(err)
+
+	workers := Workers{
+		maxWorkers: 10000,
+		arg:        proc,
+		In:         make(chan Ijob, 1000),
+		Out:        make(chan Ijob, 1000),
 	}
 
-	job.Done()
+	fin, err := os.Open(path)
+	checkErrFatal(err)
+
+	go processJobsFromReader(fin, &workers)
+
+	count, err := processOutput(&workers, "out.txt")
+	if err != nil {
+		return 0, err
+	}
+
+	log.Printf("Calculated %d jobs, saved to %s\n", count, "out.txt")
+	return count, nil
 }
 
-// Performs all jobs from file and saves it to out.txt
-func processJobs(path string) (int, error) {
-	b, err := ioutil.ReadFile(path)
-	if err != nil {
-		return 0, err
-	}
-
-	b = bytes.Trim(b, "[] \t\r\n")
-	bs := bytes.SplitAfter(b, []byte("},"))
-
-	proc, err := getProc("Div")
-	if err != nil {
-		return 0, err
-	}
-
-	jobs := make([]JobObj, len(bs))
-	var wg sync.WaitGroup
-	//wg.Add(len(bs))
-
-	for i := range bs {
-		wg.Add(1)
-		jobs[i] = JobObj{rawdata: bs[i], WaitGroup: &wg}
-		go calcOne(&jobs[i], proc)
-	}
-
-	outpath := "out.txt"
+func processOutput(workers *Workers, outpath string) (count int, err error) {
 	fout, err := os.Create(outpath)
-	if err != nil {
-		return 0, err
-	}
+	checkErrFatal(err)
+	wr := bufio.NewWriter(fout)
 	defer fout.Close()
 
-	wg.Wait()
-	for _, v := range jobs {
-		if v.err {
-			_, err = fout.WriteString("err\n")
-		} else {
-			_, err = fout.WriteString(fmt.Sprintln(v.res))
-		}
+	count = 0
+	for vi := range workers.Out {
+		v := vi.(*JobObj).getRes().(string)
+		_, err = wr.WriteString(v)
 		if err != nil {
 			log.Println(err)
 		}
+		count += 1
 	}
-	log.Printf("Calculated %d jobs, saved to %s\n", len(jobs), outpath)
+	wr.Flush()
+	return
+}
 
-	return len(jobs), nil
+func processJobsFromReader(reader io.Reader, workers *Workers) {
+	dec := json.NewDecoder(reader)
+
+	// read opening [
+	token, err := dec.Token()
+	checkErrFatal(err)
+
+	if tokend, ok := token.(json.Delim); ok == false || tokend.String() != "[" {
+		log.Fatal("First token != '['")
+	}
+
+	for dec.More() {
+		var parsed JobObj
+		err = dec.Decode(&parsed)
+		checkErrFatal(err)
+
+		workers.CreateNewWorker()
+		workers.In <- &parsed
+	}
+
+	// read closing ]
+	token, err = dec.Token()
+	checkErrFatal(err)
+
+	workers.CreateCloser()
+	close(workers.In)
 }
 
 func main() {
