@@ -9,13 +9,13 @@ import (
 
 // Represents one Job object
 type JobObj struct {
+	lock int32
+
 	// Values of the object
 	// Pointers - to make default values as nil instead of 0
 	Arg1, Arg2 *int32
 	res        int
 	err        bool
-
-	lock int32
 }
 
 // returns result

@@ -12,6 +12,8 @@ type Ijob interface {
 
 // Structure to run several Ijob workers
 type Workers struct {
+	lock int32
+
 	currentWorkers, maxWorkers int32
 	In, Out                    chan Ijob
 
@@ -19,8 +21,6 @@ type Workers struct {
 
 	wg   sync.WaitGroup
 	once bool
-
-	lock int32
 }
 
 func (obj *Workers) Lock() {
