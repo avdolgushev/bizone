@@ -8,7 +8,6 @@ import (
 
 type Ijob interface {
 	DoJob(arg interface{})
-	GetRes() interface{}
 }
 
 // Structure to run several Ijob workers

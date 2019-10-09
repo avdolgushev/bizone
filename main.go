@@ -91,7 +91,7 @@ func processOutput(workers *Workers, outpath string) (count int, err error) {
 
 	count = 0
 	for vi := range workers.Out {
-		v := vi.GetRes().(string)
+		v := vi.(*JobObj).String()
 		_, err = wr.WriteString(v)
 		if err != nil {
 			log.Println(err)

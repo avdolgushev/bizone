@@ -19,7 +19,7 @@ type JobObj struct {
 }
 
 // returns result
-func (obj *JobObj) GetRes() interface{} {
+func (obj *JobObj) String() string {
 	obj.Lock()
 	defer obj.Unlock()
 
