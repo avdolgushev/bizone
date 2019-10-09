@@ -11,6 +11,8 @@ import (
 	"runtime"
 	"syscall"
 	"time"
+
+	"github.com/avdolgushev/bizone/workers"
 )
 
 func checkErrFatal(err error) {
@@ -62,19 +64,19 @@ func processJobsFromFile(path string) (int, error) {
 	} else {
 		maxWorkers = 5000
 	}
-	workers := Workers{
-		maxWorkers: maxWorkers,
-		arg:        proc,
-		In:         make(chan Ijob, 1000),
-		Out:        make(chan Ijob, 1000),
+	wrkrs := workers.Workers{
+		MaxWorkers: maxWorkers,
+		Arg:        proc,
+		In:         make(chan workers.Ijob, 1000),
+		Out:        make(chan workers.Ijob, 1000),
 	}
 
 	fin, err := os.Open(path)
 	checkErrFatal(err)
 
-	go processJobsFromReader(fin, &workers)
+	go processJobsFromReader(fin, &wrkrs)
 
-	count, err := processOutput(&workers, "out.txt")
+	count, err := processOutput(&wrkrs, "out.txt")
 	if err != nil {
 		return 0, err
 	}
@@ -83,7 +85,7 @@ func processJobsFromFile(path string) (int, error) {
 	return count, nil
 }
 
-func processOutput(workers *Workers, outpath string) (count int, err error) {
+func processOutput(workers *workers.Workers, outpath string) (count int, err error) {
 	fout, err := os.Create(outpath)
 	checkErrFatal(err)
 	wr := bufio.NewWriter(fout)
@@ -102,7 +104,7 @@ func processOutput(workers *Workers, outpath string) (count int, err error) {
 	return
 }
 
-func processJobsFromReader(reader io.Reader, workers *Workers) {
+func processJobsFromReader(reader io.Reader, workers *workers.Workers) {
 	dec := json.NewDecoder(reader)
 
 	// read opening [

@@ -1,4 +1,4 @@
-package main
+package workers
 
 import (
 	"runtime"
@@ -14,10 +14,10 @@ type Ijob interface {
 type Workers struct {
 	lock int32
 
-	currentWorkers, maxWorkers int32
+	CurrentWorkers, MaxWorkers int32
 	In, Out                    chan Ijob
 
-	arg interface{}
+	Arg interface{}
 
 	wg   sync.WaitGroup
 	once bool
@@ -38,17 +38,17 @@ func (obj *Workers) CreateNewWorker() {
 	obj.Lock()
 	defer obj.Unlock()
 
-	if obj.currentWorkers < obj.maxWorkers {
+	if obj.CurrentWorkers < obj.MaxWorkers {
 		obj.wg.Add(1)
 		go obj.processJobs()
-		obj.currentWorkers++
+		obj.CurrentWorkers++
 	}
 }
 
 // Processes input's jobs and sends them to out
 func (obj *Workers) processJobs() {
 	for job := range obj.In {
-		job.DoJob(obj.arg)
+		job.DoJob(obj.Arg)
 		obj.Out <- job
 	}
 
@@ -56,7 +56,7 @@ func (obj *Workers) processJobs() {
 	defer obj.Unlock()
 
 	obj.wg.Done()
-	obj.currentWorkers--
+	obj.CurrentWorkers--
 }
 
 // run a goroutine that will close out channel when all workers finish
